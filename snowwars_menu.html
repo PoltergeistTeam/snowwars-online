@@ -1,0 +1,2404 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SnowWars V2 — Меню</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(160deg, #1e3a5f 0%, #2d5a87 40%, #4a90b8 100%);
+    overflow: hidden;
+    color: #fff;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  /* Снег (частицы) */
+  #snowCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+
+  .menu-container { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; min-height: 0; }
+
+  /* Заголовок */
+  .game-title {
+    text-align: center;
+    font-size: clamp(30px, 7vh, 52px);
+    font-weight: 900;
+    letter-spacing: 3px;
+    margin-top: clamp(6px, 2vh, 20px);
+    text-shadow: 0 0 20px rgba(255,255,255,0.4), 0 3px 0 rgba(0,0,0,0.3);
+    font-style: italic;
+    flex-shrink: 0;
+  }
+
+  /* Ник */
+  .nick-plate {
+    position: absolute;
+    top: 90px; left: 30px;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    transition: 0.2s;
+  }
+  .nick-plate:hover { background: rgba(0,0,0,0.55); transform: scale(1.05); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: #ffd700; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .nick-text { font-size: 18px; font-weight: bold; }
+
+  /* Боковые кнопки */
+  .side-buttons { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 20px; }
+  .side-buttons.left { left: 30px; }
+  .side-buttons.right { right: 30px; }
+  .menu-btn {
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 12px 18px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    font-size: 16px; font-weight: bold; color: #fff;
+    transition: 0.2s;
+    min-width: 170px;
+  }
+  .menu-btn:hover { background: rgba(255,255,255,0.2); transform: translateX(5px) scale(1.03); }
+  .side-buttons.right .menu-btn:hover { transform: translateX(-5px) scale(1.03); }
+  .btn-icon { font-size: 24px; width: 30px; text-align: center; }
+
+  /* Агент */
+  .agent-area { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden; }
+  .agent {
+    width: clamp(140px, 28vh, 280px); height: clamp(200px, 40vh, 400px);
+    position: relative;
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  .agent.hidden { opacity: 0; transform: scale(0.8); pointer-events: none; }
+  #agentCanvas { width: 100%; height: 100%; display: block; }
+
+  /* Нижние плашки */
+  .bottom-bar {
+    display: flex; justify-content: center; align-items: flex-end; gap: 20px;
+    padding-bottom: clamp(10px, 3vh, 30px);
+    flex-shrink: 0;
+  }
+  .play-btn {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border: 3px solid #fff;
+    border-radius: 16px;
+    padding: 18px 60px;
+    font-size: 28px; font-weight: 900; letter-spacing: 2px;
+    cursor: pointer;
+    color: #fff;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.3);
+    box-shadow: 0 6px 0 #1e8449, 0 10px 20px rgba(0,0,0,0.4);
+    transition: 0.15s;
+  }
+  .play-btn:hover { transform: translateY(-3px); box-shadow: 0 9px 0 #1e8449, 0 14px 25px rgba(0,0,0,0.4); }
+  .play-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #1e8449; }
+
+  .play-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .online-toggle {
+    display: flex; gap: 4px;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 10px;
+    padding: 4px;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .online-toggle.hidden { display: none; }
+  .online-opt {
+    padding: 5px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.6;
+    white-space: nowrap;
+  }
+  .online-opt:hover { opacity: 0.9; }
+  .online-opt.selected { background: rgba(46,204,113,0.35); opacity: 1; }
+
+  .promo-box { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0 20px; }
+  .promo-label { font-size: 13px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+  .promo-input {
+    width: 80%;
+    max-width: 280px;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .promo-input:focus { outline: none; border-color: #2ecc71; }
+  .promo-submit-btn {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border: 2px solid #fff;
+    border-radius: 10px;
+    padding: 10px 30px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    cursor: pointer;
+    color: #fff;
+  }
+  .promo-submit-btn:hover { transform: translateY(-2px); }
+  .promo-msg { font-size: 13px; min-height: 18px; text-align: center; }
+  .promo-msg.ok { color: #2ecc71; font-weight: bold; }
+  .promo-msg.err { color: #ff6b6b; }
+
+  .plate {
+    background: rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    text-align: center;
+    min-width: 150px;
+    transition: 0.2s;
+    position: relative;
+  }
+  .plate:hover { background: rgba(255,255,255,0.15); }
+  .plate-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+  .plate-value { font-size: 18px; font-weight: bold; margin-top: 4px; }
+
+  /* Выпадающие списки */
+  .dropdown {
+    position: absolute;
+    bottom: 110%;
+    left: 50%; transform: translateX(-50%);
+    background: rgba(10,25,45,0.95);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 8px;
+    display: none;
+    flex-direction: column; gap: 6px;
+    min-width: 220px;
+    z-index: 50;
+  }
+  .dropdown.open { display: flex; }
+  .dropdown-item {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.15s;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .dropdown-item:hover { background: rgba(255,255,255,0.15); }
+  .dropdown-item.disabled { opacity: 0.45; cursor: not-allowed; font-style: italic; }
+  .dropdown-item.disabled:hover { background: none; }
+  .dropdown-item.selected { background: rgba(46,204,113,0.3); border: 1px solid #2ecc71; }
+
+  /* Модальные окна */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: linear-gradient(160deg, #1a2f4a, #0f1e33);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 30px;
+    width: 520px; max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    animation: modalIn 0.25s ease;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  .modal-title { font-size: 24px; font-weight: 900; margin-bottom: 20px; text-align: center; letter-spacing: 1px; }
+
+  /* Настройки */
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab {
+    flex: 1; padding: 10px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    text-align: center; cursor: pointer;
+    font-size: 14px; font-weight: bold;
+    transition: 0.2s;
+  }
+  .tab:hover { background: rgba(255,255,255,0.18); }
+  .tab.active { background: rgba(46,204,113,0.35); border-color: #2ecc71; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .setting-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .setting-name { font-size: 15px; }
+  .toggle {
+    width: 52px; height: 28px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    transition: 0.25s;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .toggle::after {
+    content: '';
+    position: absolute; top: 2px; left: 2px;
+    width: 22px; height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.25s;
+  }
+  .toggle.on { background: #2ecc71; }
+  .toggle.on::after { left: 26px; }
+  .slider { width: 160px; accent-color: #2ecc71; cursor: pointer; }
+  select {
+    background: rgba(255,255,255,0.1);
+    color: #fff; border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  select option { background: #1a2f4a; }
+
+  /* Профиль */
+  .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .avatar-option {
+    aspect-ratio: 1;
+    background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .avatar-option:hover { background: rgba(255,255,255,0.2); transform: scale(1.08); }
+  .avatar-option.selected { border-color: #ffd700; background: rgba(255,215,0,0.2); box-shadow: 0 0 15px rgba(255,215,0,0.4); }
+  .nick-input {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: #fff; font-size: 17px;
+    outline: none;
+    text-align: center;
+  }
+  .nick-input:focus { border-color: #2ecc71; }
+  .save-btn {
+    width: 100%; margin-top: 15px;
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border: none; border-radius: 10px;
+    padding: 12px;
+    color: #fff; font-size: 16px; font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .save-btn:hover { filter: brightness(1.15); }
+
+  .close-x {
+    position: absolute; top: 15px; right: 20px;
+    font-size: 24px; cursor: pointer; opacity: 0.6;
+    transition: 0.2s;
+  }
+  .close-x:hover { opacity: 1; transform: scale(1.2); }
+  .modal { position: relative; }
+
+  .placeholder-box {
+    text-align: center;
+    padding: 40px 20px;
+    opacity: 0.7;
+    font-size: 16px;
+    line-height: 1.8;
+  }
+  .placeholder-box .big-icon { font-size: 56px; display: block; margin-bottom: 15px; }
+
+  /* Экран катки (3D-полигон) */
+  #gameScreen {
+    position: fixed; inset: 0;
+    background: #0d1b2a;
+    display: none;
+    z-index: 200;
+  }
+  #gameScreen.open { display: block; }
+  #gameCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  #gameLoading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px;
+    background: linear-gradient(160deg, #0d1b2a, #1b3a5c);
+    z-index: 5;
+    font-size: 18px;
+  }
+  .loader-ring {
+    width: 44px; height: 44px;
+    border: 4px solid rgba(255,255,255,0.2);
+    border-top-color: #7fd1ff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .game-info {
+    position: absolute;
+    top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 6px 16px;
+    border-radius: 10px;
+    white-space: nowrap;
+    z-index: 3;
+    max-width: 90vw;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .back-btn {
+    position: absolute;
+    top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 8px 16px;
+    border-radius: 10px; font-size: 14px;
+    cursor: pointer;
+    z-index: 10;
+  }
+  .back-btn:hover { background: rgba(255,255,255,0.25); }
+
+  /* Прицел */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    width: 8px; height: 8px;
+    margin: -4px 0 0 -4px;
+    border: 2px solid rgba(255,255,255,0.85);
+    border-radius: 50%;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  /* Счётчик снежков */
+  #snowballHud {
+    position: absolute;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px)); left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(0,0,0,0.4);
+    padding: 8px 18px; border-radius: 30px;
+    font-size: 18px; font-weight: bold;
+    z-index: 6;
+  }
+
+  /* Подсказка/прогресс лепки снежка */
+  #craftPrompt {
+    position: absolute; top: 40%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center; font-size: 14px;
+    background: rgba(0,0,0,0.45);
+    padding: 8px 16px; border-radius: 10px;
+    display: none;
+    z-index: 6;
+  }
+  #craftPrompt.show { display: block; }
+  #craftRing {
+    width: 46px; height: 46px;
+    margin: 8px auto 0;
+    border-radius: 50%;
+    background: conic-gradient(#7fd1ff calc(var(--p,0) * 1%), rgba(255,255,255,0.2) 0);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #craftRing::after { content: '❄'; font-size: 18px; }
+
+  /* Мобильное управление */
+  #mobileControls { display: none; }
+  .is-touch #mobileControls { display: block; }
+  .joy-base {
+    position: absolute;
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px)); left: 30px;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.3);
+    z-index: 7;
+  }
+  .joy-stick {
+    position: absolute; top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    margin: -25px 0 0 -25px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+  }
+  .look-zone {
+    position: absolute; top: 0; right: 0;
+    width: 55%; height: 100%;
+    z-index: 2;
+  }
+  .action-btn {
+    position: absolute;
+    bottom: calc(38px + env(safe-area-inset-bottom, 0px));
+    width: 74px; height: 74px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.3);
+    z-index: 7;
+  }
+  #throwBtn { right: 30px; }
+  #craftBtnMobile { right: 120px; width: 60px; height: 60px; font-size: 20px; opacity: 0.5; }
+  #craftBtnMobile.active { opacity: 1; background: rgba(46,204,113,0.35); border-color: #2ecc71; }
+  #jumpBtn { right: 30px; bottom: calc(126px + env(safe-area-inset-bottom, 0px)); width: 60px; height: 60px; font-size: 22px; }
+
+  /* Экран подготовки к катке (сложность NPC + команда) */
+  #preMatchScreen {
+    position: fixed; inset: 0;
+    background: linear-gradient(160deg, #0d1b2a, #1b3a5c);
+    display: none;
+    z-index: 150;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    overflow-y: auto;
+  }
+  #preMatchScreen.open { display: flex; }
+  .prematch-title { font-size: 26px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px; text-align: center; }
+  .prematch-sub { opacity: 0.65; font-size: 14px; margin-bottom: 28px; text-align: center; }
+
+  .prematch-label { font-size: 12px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; text-align: center; }
+
+  .difficulty-bar {
+    display: flex;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 16px;
+    padding: 6px;
+    gap: 6px;
+    width: 100%; max-width: 460px;
+  }
+  .difficulty-opt {
+    flex: 1;
+    text-align: center;
+    padding: 13px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: 0.2s;
+    opacity: 0.75;
+    border: 1px solid transparent;
+  }
+  .difficulty-opt:hover { background: rgba(255,255,255,0.1); opacity: 1; }
+  .difficulty-opt.selected { background: rgba(46,204,113,0.3); border-color: #2ecc71; opacity: 1; box-shadow: 0 0 12px rgba(46,204,113,0.25); }
+  .difficulty-desc {
+    min-height: 38px;
+    text-align: center;
+    font-size: 13px;
+    opacity: 0.7;
+    max-width: 460px;
+    margin: 12px 0 32px;
+    line-height: 1.5;
+    padding: 0 10px;
+  }
+
+  .team-select {
+    display: flex; gap: 18px;
+    width: 100%; max-width: 460px;
+    margin-bottom: 34px;
+  }
+  .team-btn {
+    flex: 1;
+    padding: 24px 10px;
+    border-radius: 16px;
+    text-align: center;
+    font-size: 19px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: 0.2s;
+    color: #fff;
+  }
+  .team-btn.blue { background: linear-gradient(145deg, #2f80ff, #1a4fb8); }
+  .team-btn.red { background: linear-gradient(145deg, #ff4d4d, #c41a1a); }
+  .team-btn:hover { transform: translateY(-3px); }
+  .team-btn.selected.blue { border-color: #9cc3ff; box-shadow: 0 0 20px rgba(47,128,255,0.6); }
+  .team-btn.selected.red { border-color: #ffb3b3; box-shadow: 0 0 20px rgba(255,77,77,0.6); }
+  .team-btn .team-icon { font-size: 28px; display: block; margin-bottom: 6px; }
+
+  .prematch-buttons { display: flex; gap: 16px; }
+  .start-match-btn {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border: 3px solid #fff;
+    border-radius: 16px;
+    padding: 15px 46px;
+    font-size: 20px; font-weight: 900; letter-spacing: 1px;
+    cursor: pointer; color: #fff;
+    box-shadow: 0 6px 0 #1e8449;
+    transition: 0.15s;
+  }
+  .start-match-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: 0 6px 0 rgba(0,0,0,0.3); filter: grayscale(0.4); }
+  .start-match-btn:not(:disabled):hover { transform: translateY(-3px); }
+  .start-match-btn:not(:disabled):active { transform: translateY(3px); box-shadow: 0 2px 0 #1e8449; }
+  .prematch-back-btn {
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.3);
+    color: #fff; padding: 15px 28px;
+    border-radius: 16px; font-size: 16px;
+    cursor: pointer;
+  }
+  .prematch-back-btn:hover { background: rgba(255,255,255,0.25); }
+
+  /* Кнопка полноэкранного режима (Android) */
+  .fullscreen-btn {
+    position: fixed;
+    top: 16px; right: 16px;
+    width: 44px; height: 44px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 500;
+  }
+  .fullscreen-btn:hover { background: rgba(255,255,255,0.2); }
+
+  #hitFlash {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,0) 40%, rgba(255,255,255,0.55) 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease-out;
+    z-index: 40;
+  }
+
+  /* Адаптация под узкие экраны (например 1080×2340 и похожие) */
+  @media (max-width: 430px) {
+    .side-buttons.left { left: 8px; }
+    .side-buttons.right { right: 8px; }
+    .side-buttons { gap: 10px; }
+    .menu-btn {
+      min-width: 0; width: 50px; height: 50px;
+      padding: 0; border-radius: 50%;
+      justify-content: center; gap: 0;
+    }
+    .menu-btn .btn-label { display: none; }
+    .btn-icon { width: auto; font-size: 20px; }
+
+    .agent { width: 150px; height: 220px; }
+
+    .bottom-bar {
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 16px;
+    }
+    .plate { min-width: 0; width: 78vw; max-width: 300px; padding: 8px 14px; }
+    .play-btn { padding: 12px 36px; font-size: 20px; }
+  }
+
+  /* Адаптация под малую высоту (ландшафтная ориентация телефона) */
+  @media (max-height: 480px) {
+    .game-title { font-size: clamp(32px, 8vh, 52px); }
+    .agent { width: clamp(160px, 34vh, 280px); height: clamp(220px, 46vh, 400px); }
+    .side-buttons { gap: 10px; }
+    .menu-btn { min-width: 150px; padding: 10px 18px; font-size: 15px; gap: 10px; }
+    .btn-icon { font-size: 21px; width: 26px; }
+    .nick-plate { top: 8px; padding: 6px 14px; }
+    .bottom-bar { padding-bottom: 6px; gap: 12px; }
+    .plate { padding: 6px 14px; min-width: 100px; }
+    .plate-label { font-size: 9px; }
+    .plate-value { font-size: 14px; margin-top: 2px; }
+    .play-btn { padding: 10px 28px !important; font-size: 18px !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="snowCanvas"></canvas>
+
+<div class="menu-container">
+  <div class="game-title">❄ SnowWars V2 ❄</div>
+
+  <div class="nick-plate" onclick="openModal('profileModal')">
+    <div class="avatar" id="nickAvatar">⛄</div>
+    <div class="nick-text" id="nickText">Игрок</div>
+  </div>
+
+  <div class="side-buttons left">
+    <div class="menu-btn" onclick="openModal('settingsModal')"><span class="btn-icon">⚙️</span><span class="btn-label">Настройки</span></div>
+    <div class="menu-btn" onclick="openModal('statsModal')"><span class="btn-icon">📊</span><span class="btn-label">Статистика</span></div>
+  </div>
+
+  <div class="side-buttons right">
+    <div class="menu-btn" onclick="openModal('inventoryModal')"><span class="btn-icon">❄️</span><span class="btn-label">Инвентарь</span></div>
+    <div class="menu-btn" onclick="openModal('shopModal')"><span class="btn-icon">🛒</span><span class="btn-label">Магазин</span></div>
+  </div>
+
+  <div class="agent-area">
+    <div class="agent" id="agent">
+      <canvas id="agentCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="plate" id="modePlate" onclick="toggleDropdown('modeDropdown')">
+      <div class="plate-label">Режим</div>
+      <div class="plate-value" id="modeValue">КБ</div>
+      <div class="dropdown" id="modeDropdown">
+        <div class="dropdown-item selected" onclick="selectMode(event, 'КБ — Командная бойня', 'КБ')">Командная бойня <span>✅</span></div>
+        <div class="dropdown-item disabled">Захват флага <span>🔒 в разработке</span></div>
+      </div>
+    </div>
+
+    <div class="play-col">
+      <div class="online-toggle hidden" id="onlineToggle">
+        <div class="online-opt selected" id="offlineOpt" onclick="selectConnection('offline')">📴 Оффлайн</div>
+        <div class="online-opt" id="onlineOpt" onclick="selectConnection('online')">🌐 Онлайн</div>
+      </div>
+      <div class="play-btn" onclick="openPreMatch()">ИГРАТЬ</div>
+    </div>
+
+    <div class="plate" id="mapPlate" onclick="toggleDropdown('mapDropdown')">
+      <div class="plate-label">Карта</div>
+      <div class="plate-value" id="mapValue">Ледяной бастион</div>
+      <div class="dropdown" id="mapDropdown">
+        <div class="dropdown-item selected" onclick="selectMap(event, 'Ледяной бастион')">Ледяной бастион <span>✅</span></div>
+        <div class="dropdown-item disabled">Зимний лес <span>🔒 в разработке</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛЬНЫЕ ОКНА -->
+
+<!-- Профиль -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <div class="close-x" onclick="closeModal('profileModal')">✕</div>
+    <div class="modal-title">ПРОФИЛЬ</div>
+    <div class="avatar-grid" id="avatarGrid"></div>
+    <input class="nick-input" id="nickInput" maxlength="16" placeholder="Введи ник...">
+    <button class="save-btn" onclick="saveProfile()">Сохранить</button>
+  </div>
+</div>
+
+<!-- Настройки -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="close-x" onclick="closeModal('settingsModal')">✕</div>
+    <div class="modal-title">НАСТРОЙКИ</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab(event, 'graphics')">Графика</div>
+      <div class="tab" onclick="switchTab(event, 'general')">Общие</div>
+      <div class="tab" onclick="switchTab(event, 'menuTab')">Меню</div>
+      <div class="tab" onclick="switchTab(event, 'sound')">Звук</div>
+    </div>
+
+    <div class="tab-content active" id="graphics">
+      <div class="setting-row"><span class="setting-name">Качество графики</span>
+        <select><option>Низкое</option><option selected>Среднее</option><option>Высокое</option><option>Ультра</option></select></div>
+      <div class="setting-row"><span class="setting-name">Тени</span><div class="toggle on" onclick="toggleSetting(this)"></div></div>
+      <div class="setting-row"><span class="setting-name">Освещение</span><div class="toggle on" onclick="toggleSetting(this)"></div></div>
+      <div class="setting-row"><span class="setting-name">Разрешение</span>
+        <select><option>1280×720</option><option selected>1920×1080</option><option>2560×1440</option></select></div>
+    </div>
+
+    <div class="tab-content" id="general">
+      <div class="setting-row"><span class="setting-name">Язык</span>
+        <select><option selected>Русский</option><option>English</option></select></div>
+      <div class="setting-row"><span class="setting-name">Показывать FPS</span><div class="toggle" onclick="toggleSetting(this)"></div></div>
+      <div class="setting-row"><span class="setting-name">Чувствительность мыши</span><input type="range" class="slider" min="1" max="100" value="50"></div>
+    </div>
+
+    <div class="tab-content" id="menuTab">
+      <div class="setting-row"><span class="setting-name">❄ Частицы (снег)</span><div class="toggle on" id="snowToggle" onclick="toggleSnow(this)"></div></div>
+      <div class="setting-row"><span class="setting-name">🤖 Агент в меню</span><div class="toggle on" id="agentToggle" onclick="toggleAgent(this)"></div></div>
+    </div>
+
+    <div class="tab-content" id="sound">
+      <div class="setting-row"><span class="setting-name">Общая громкость</span><input type="range" class="slider" min="0" max="100" value="80"></div>
+      <div class="setting-row"><span class="setting-name">Музыка</span><input type="range" class="slider" min="0" max="100" value="60"></div>
+      <div class="setting-row"><span class="setting-name">Звуковые эффекты</span><input type="range" class="slider" min="0" max="100" value="70"></div>
+      <div class="setting-row"><span class="setting-name">Звук в меню</span><div class="toggle on" onclick="toggleSetting(this)"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Заглушки -->
+<div class="modal-overlay" id="statsModal">
+  <div class="modal">
+    <div class="close-x" onclick="closeModal('statsModal')">✕</div>
+    <div class="modal-title">СТАТИСТИКА</div>
+    <div class="placeholder-box"><span class="big-icon">📊</span>Пока пусто.<br>Статистика появится после первых каток!</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="inventoryModal">
+  <div class="modal">
+    <div class="close-x" onclick="closeModal('inventoryModal')">✕</div>
+    <div class="modal-title">ИНВЕНТАРЬ</div>
+    <div class="placeholder-box"><span class="big-icon">❄️</span>Здесь будут твои снежки,<br>скины и предметы.</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="shopModal">
+  <div class="modal">
+    <div class="close-x" onclick="closeModal('shopModal')">✕</div>
+    <div class="modal-title">МАГАЗИН</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchShopTab(event, 'shopTabContent')">Магазин</div>
+      <div class="tab" onclick="switchShopTab(event, 'promoTabContent')">Промокод</div>
+    </div>
+    <div class="tab-content active" id="shopTabContent">
+      <div class="placeholder-box"><span class="big-icon">🛒</span>Магазин скоро откроется!<br>Готовь снежки 🪙</div>
+    </div>
+    <div class="tab-content" id="promoTabContent">
+      <div class="promo-box">
+        <div class="promo-label">Введите промокод</div>
+        <input type="text" id="promoInput" class="promo-input" placeholder="КОД" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter')submitPromoCode()">
+        <div class="promo-submit-btn" onclick="submitPromoCode()">Активировать</div>
+        <div class="promo-msg" id="promoMsg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Экран подготовки: сложность NPC + выбор команды -->
+<div id="preMatchScreen">
+  <div class="prematch-title">⚔ КОМАНДНАЯ БОЙНЯ 5×5</div>
+  <div class="prematch-sub">Настрой бой перед стартом</div>
+
+  <div class="prematch-label">Сложность NPC</div>
+  <div class="difficulty-bar" id="difficultyBar">
+    <div class="difficulty-opt" data-diff="none" onclick="selectDifficulty(this,'none')">Без ИИ</div>
+    <div class="difficulty-opt selected" data-diff="harmless" onclick="selectDifficulty(this,'harmless')">Безобидные</div>
+    <div class="difficulty-opt" data-diff="normal" onclick="selectDifficulty(this,'normal')">Обычные</div>
+  </div>
+  <div class="difficulty-desc" id="difficultyDesc">Безобидные — NPC просто ходят по карте и не атакуют.</div>
+
+  <div class="prematch-label">Команда</div>
+  <div class="team-select">
+    <div class="team-btn blue" id="teamBlueBtn" onclick="selectTeam('blue')">
+      <span class="team-icon">🔵</span>Синие
+    </div>
+    <div class="team-btn red" id="teamRedBtn" onclick="selectTeam('red')">
+      <span class="team-icon">🔴</span>Красные
+    </div>
+  </div>
+
+  <div class="prematch-buttons">
+    <div class="prematch-back-btn" onclick="closePreMatch()">← Назад</div>
+    <button class="start-match-btn" id="startMatchBtn" disabled onclick="confirmStart()">В БОЙ</button>
+  </div>
+</div>
+
+<!-- Экран катки (3D-полигон) -->
+<div id="gameScreen">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="gameLoading">
+    <div class="loader-ring"></div>
+    <div>Загружаем полигон...</div>
+  </div>
+
+  <div class="game-info" id="gameInfo"></div>
+  <button class="back-btn" onclick="exitGame()">← В меню</button>
+  <div id="crosshair"></div>
+  <div id="hitFlash"></div>
+
+  <div id="snowballHud">❄ <span id="snowCount">0</span>/<span id="snowMax">6</span></div>
+
+  <div id="craftPrompt">
+    Подойди к куче снега<br>
+    <span id="craftHintText">и зажми E, чтобы слепить снежок</span>
+    <div id="craftRing" style="--p:0"></div>
+  </div>
+
+  <div id="mobileControls">
+    <div class="joy-base" id="moveJoyBase"><div class="joy-stick" id="moveJoyStick"></div></div>
+    <div class="look-zone" id="lookZone"></div>
+    <div class="action-btn" id="throwBtn">🎯</div>
+    <div class="action-btn" id="craftBtnMobile">❄</div>
+    <div class="action-btn" id="jumpBtn">⬆</div>
+  </div>
+</div>
+
+<script>
+// ===== СНЕГ =====
+const canvas = document.getElementById('snowCanvas');
+const ctx = canvas.getContext('2d');
+let snowOn = true;
+let flakes = [];
+
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+resize();
+addEventListener('resize', resize);
+
+for (let i = 0; i < 120; i++) {
+  flakes.push({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, r: Math.random()*3+1, s: Math.random()*1.5+0.5, drift: Math.random()*0.8-0.4 });
+}
+
+function drawSnow() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (snowOn) {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    flakes.forEach(f => {
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2); ctx.fill();
+      f.y += f.s; f.x += f.drift;
+      if (f.y > innerHeight) { f.y = -5; f.x = Math.random()*innerWidth; }
+      if (f.x > innerWidth) f.x = 0; if (f.x < 0) f.x = innerWidth;
+    });
+  }
+  requestAnimationFrame(drawSnow);
+}
+drawSnow();
+
+// ===== МОДАЛКИ =====
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ===== ВКЛАДКИ =====
+function switchTab(e, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+function switchShopTab(e, id) {
+  document.querySelectorAll('#shopModal .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#shopModal .tab-content').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+// ===== ТОГГЛЫ =====
+function toggleSetting(el) { el.classList.toggle('on'); }
+function toggleSnow(el) { el.classList.toggle('on'); snowOn = el.classList.contains('on'); }
+// ===== ПРОМОКОДЫ И РЕЖИМ ОНЛАЙН/ОФФЛАЙН =====
+let connectionMode = 'offline';
+const PROMO_ONLINE = 'SWDCSMPLANCBT';
+
+function submitPromoCode() {
+  const input = document.getElementById('promoInput');
+  const msg = document.getElementById('promoMsg');
+  const code = (input.value || '').trim().toUpperCase();
+  if (!code) return;
+  if (code === PROMO_ONLINE) {
+    unlockOnlineToggle();
+    msg.textContent = 'Промокод принят! Открыт выбор Онлайн/Оффлайн.';
+    msg.className = 'promo-msg ok';
+  } else {
+    msg.textContent = 'Такого промокода нет.';
+    msg.className = 'promo-msg err';
+  }
+  input.value = '';
+}
+
+function unlockOnlineToggle() {
+  document.getElementById('onlineToggle').classList.remove('hidden');
+  try { localStorage.setItem('sw_online_unlocked', '1'); } catch (e) {}
+}
+
+function selectConnection(mode) {
+  connectionMode = mode;
+  document.getElementById('offlineOpt').classList.toggle('selected', mode === 'offline');
+  document.getElementById('onlineOpt').classList.toggle('selected', mode === 'online');
+}
+
+(function restorePromoState() {
+  try {
+    if (localStorage.getItem('sw_online_unlocked') === '1') {
+      document.getElementById('onlineToggle').classList.remove('hidden');
+    }
+  } catch (e) {}
+})();
+
+function toggleAgent(el) {
+
+
+  el.classList.toggle('on');
+  document.getElementById('agent').classList.toggle('hidden', !el.classList.contains('on'));
+}
+
+// ===== ВЫПАДАШКИ =====
+function toggleDropdown(id) {
+  document.querySelectorAll('.dropdown').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+  document.getElementById(id).classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.plate')) document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+});
+
+let currentMode = 'КБ', currentMap = 'Ледяной бастион';
+function selectMode(e, full, short) {
+  e.stopPropagation();
+  currentMode = short;
+  document.getElementById('modeValue').textContent = short;
+  document.querySelectorAll('#modeDropdown .dropdown-item').forEach(i => i.classList.remove('selected'));
+  e.currentTarget.classList.add('selected');
+  document.getElementById('modeDropdown').classList.remove('open');
+}
+function selectMap(e, name) {
+  e.stopPropagation();
+  currentMap = name;
+  document.getElementById('mapValue').textContent = name;
+  document.querySelectorAll('#mapDropdown .dropdown-item').forEach(i => i.classList.remove('selected'));
+  e.currentTarget.classList.add('selected');
+  document.getElementById('mapDropdown').classList.remove('open');
+}
+
+// ===== ПРОФИЛЬ =====
+const avatars = ['⛄','🎿','🏂','🦌','🐧','🥶','🔥','👑'];
+let selectedAvatar = '⛄';
+const grid = document.getElementById('avatarGrid');
+avatars.forEach(a => {
+  const d = document.createElement('div');
+  d.className = 'avatar-option' + (a === selectedAvatar ? ' selected' : '');
+  d.textContent = a;
+  d.onclick = () => {
+    selectedAvatar = a;
+    document.querySelectorAll('.avatar-option').forEach(x => x.classList.remove('selected'));
+    d.classList.add('selected');
+  };
+  grid.appendChild(d);
+});
+function saveProfile() {
+  const nick = document.getElementById('nickInput').value.trim() || 'Игрок';
+  document.getElementById('nickText').textContent = nick;
+  document.getElementById('nickAvatar').textContent = selectedAvatar;
+  closeModal('profileModal');
+}
+
+// ===== ПОДГОТОВКА К БОЮ (сложность NPC + команда) =====
+let selectedDifficulty = 'harmless';
+let selectedTeam = null;
+
+const difficultyInfo = {
+  none: 'Без ИИ — NPC просто стоят на спавне и ничего не делают.',
+  harmless: 'Безобидные — NPC просто ходят по карте и не атакуют.',
+  normal: 'Обычные — NPC кидают снежки и в тебя, и в других NPC. Friendly fire отключён.'
+};
+
+function openPreMatch() {
+  document.getElementById('preMatchScreen').classList.add('open');
+}
+function closePreMatch() {
+  document.getElementById('preMatchScreen').classList.remove('open');
+  selectedTeam = null;
+  document.getElementById('teamBlueBtn').classList.remove('selected');
+  document.getElementById('teamRedBtn').classList.remove('selected');
+  document.getElementById('startMatchBtn').disabled = true;
+}
+function selectDifficulty(el, diff) {
+  selectedDifficulty = diff;
+  document.querySelectorAll('.difficulty-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('difficultyDesc').textContent = difficultyInfo[diff];
+}
+function selectTeam(team) {
+  selectedTeam = team;
+  document.getElementById('teamBlueBtn').classList.toggle('selected', team === 'blue');
+  document.getElementById('teamRedBtn').classList.toggle('selected', team === 'red');
+  document.getElementById('startMatchBtn').disabled = false;
+}
+function confirmStart() {
+  if (!selectedTeam) return;
+  document.getElementById('preMatchScreen').classList.remove('open');
+  startGame();
+}
+
+// ===== СТАРТ КАТКИ =====
+function startGame() {
+  const diffNames = { none: 'Без ИИ', harmless: 'Безобидные', normal: 'Обычные' };
+  const teamNames = { blue: '🔵 Синие', red: '🔴 Красные' };
+  document.getElementById('gameInfo').textContent =
+    `${currentMode} • ${currentMap} • NPC: ${diffNames[selectedDifficulty]} • ${teamNames[selectedTeam]}`;
+  document.getElementById('gameScreen').classList.add('open');
+  enterGame();
+}
+function exitGame() {
+  document.getElementById('gameScreen').classList.remove('open');
+  if (animId) cancelAnimationFrame(animId);
+  animId = null;
+  if (document.pointerLockElement) document.exitPointerLock();
+  crafting = false;
+  // Полная очистка сцены для пересоздания при следующем входе
+  if (renderer) { renderer.dispose(); renderer = null; }
+  scene = null; camera = null; world = null;
+  snowballs.length = 0;
+  dummies.length = 0;
+  obstacles.length = 0;
+  towers.length = 0;
+  splats.length = 0;
+  particles.length = 0;
+  playerRig = null;
+  playerGroundY = 0; isClimbing = false; climbingTower = null;
+  playerDown = false; playerDownTimer = 0;
+  gameInited = false;
+  document.getElementById('gameLoading').style.display = '';
+  document.getElementById('hitFlash').style.opacity = 0;
+}
+
+// ===== 3D-ПОЛИГОН: карта, ходьба от первого лица, лепка/бросок снежков, регдолл =====
+let gameInited = false;
+let scene, camera, renderer, world;
+let playerYaw = 0, playerPitch = 0;
+let playerPos = { x: 0, z: 14 };
+const EYE_HEIGHT = 1.7;
+const ARENA_HALF = 28;
+const MOVE_SPEED = 5.4;
+const keys = {};
+let pointerLocked = false;
+let touchDevice = false;
+
+let snowCount = 3, snowMax = 3;
+const CRAFT_TIME = 1100;
+let craftProgress = 0, crafting = false;
+const snowPiles = [ { x: -18, z: -12 }, { x: 18, z: -12 }, { x: -18, z: 12 }, { x: 18, z: 12 }, { x: 0, z: 0 } ];
+const PILE_RADIUS = 3;
+
+let handGroup, rightHand, craftBall, throwAnimT = -1, handBobT = 0;
+const snowballs = [];
+const dummies = [];
+const obstacles = [];
+let moveVec = { x: 0, y: 0 };
+
+let clockLast = 0, animId = null;
+let globalBodyMat = null;
+let nearSnowPile = false;
+let craftAnimT = 0;
+let playerHitFlash = 0;
+const NPC_SPEED = 2.0;
+const NPC_THROW_RANGE = 13;
+let playerVelY = 0, playerJumpY = 0, isJumping = false;
+const JUMP_SPEED = 6.2, GRAVITY_PLAYER = -17;
+let playerRig = null, playerDown = false, playerDownTimer = 0;
+const PLAYER_RESPAWN_TIME = 5000;
+const towers = [];
+let playerGroundY = 0, isClimbing = false;
+const CLIMB_SPEED = 3.0;
+const splats = [];
+const particles = [];
+let lastMoveLen = 0;
+
+function isTouchDevice() {
+  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+}
+
+function initGame() {
+  if (gameInited) return;
+  gameInited = true;
+  touchDevice = isTouchDevice();
+  if (touchDevice) document.body.classList.add('is-touch');
+
+  const canvasEl = document.getElementById('gameCanvas');
+  renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9fd3ec);
+  scene.fog = new THREE.Fog(0x9fd3ec, 35, 95);
+
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 200);
+  scene.add(camera);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x6a89a8, 0.9);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(20, 30, 10);
+  sun.castShadow = true;
+  sun.shadow.camera.left = -32; sun.shadow.camera.right = 32;
+  sun.shadow.camera.top = 32; sun.shadow.camera.bottom = -32;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene.add(sun);
+
+  world = new CANNON.World();
+  world.gravity.set(0, -18, 0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  world.solver.iterations = 10;
+
+  const groundMat = new CANNON.Material('ground');
+  globalBodyMat = new CANNON.Material('body');
+  const bodyMat = globalBodyMat;
+  world.addContactMaterial(new CANNON.ContactMaterial(groundMat, bodyMat, { friction: 0.3, restitution: 0.2 }));
+
+  const groundGeo = new THREE.PlaneGeometry(ARENA_HALF * 2 + 4, ARENA_HALF * 2 + 4, 20, 20);
+  groundGeo.rotateX(-Math.PI / 2);
+  const groundMesh = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ color: 0xf2f6fa }));
+  groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+  const groundBody = new CANNON.Body({ mass: 0, material: groundMat });
+  groundBody.addShape(new CANNON.Plane());
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x3f6fa0 });
+  function addWall(x, z, w, d) {
+    const h = 6;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+    mesh.position.set(x, h / 2, z);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+    const body = new CANNON.Body({ mass: 0, material: groundMat });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
+    body.position.set(x, h / 2, z);
+    world.addBody(body);
+  }
+  const A = ARENA_HALF;
+  addWall(0, -A - 0.5, A * 2 + 4, 1);
+  addWall(0, A + 0.5, A * 2 + 4, 1);
+  addWall(-A - 0.5, 0, 1, A * 2 + 4);
+  addWall(A + 0.5, 0, 1, A * 2 + 4);
+
+  function addTower(x, z, color, name, ladderDirZ) {
+    const deckY = 8.2;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 1, 10), new THREE.MeshStandardMaterial({ color: 0xe8f2f8 }));
+    base.position.set(x, 0.5, z); base.castShadow = true; base.receiveShadow = true;
+    scene.add(base);
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 7, 10), new THREE.MeshStandardMaterial({ color: 0xdcebf4 }));
+    pillar.position.set(x, 4.5, z); pillar.castShadow = true; pillar.receiveShadow = true;
+    scene.add(pillar);
+    const deckMat = new THREE.MeshStandardMaterial({ color });
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 0.4, 10), deckMat);
+    deck.position.set(x, deckY, z); deck.castShadow = true; deck.receiveShadow = true;
+    scene.add(deck);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.1, 0.15), deckMat);
+      post.position.set(x + Math.cos(a) * 2.3, 9, z + Math.sin(a) * 2.3);
+      scene.add(post);
+    }
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 1.6, 10), deckMat);
+    roof.position.set(x, 10.4, z); roof.castShadow = true;
+    scene.add(roof);
+
+    const pillarBody = new CANNON.Body({ mass: 0, material: groundMat });
+    pillarBody.addShape(new CANNON.Cylinder(1, 1.1, 7, 10));
+    pillarBody.position.set(x, 4.5, z);
+    world.addBody(pillarBody);
+    const deckBody = new CANNON.Body({ mass: 0, material: groundMat });
+    deckBody.addShape(new CANNON.Cylinder(2.4, 2.4, 0.4, 10));
+    deckBody.position.set(x, deckY, z);
+    world.addBody(deckBody);
+    obstacles.push({ x, z, hw: 1.1, hd: 1.1, tower: true });
+
+    // Ступеньки на башню (винтовая лестница вокруг опоры)
+    const baseAngle = ladderDirZ > 0 ? Math.PI / 2 : -Math.PI / 2;
+    const stepRadius = 1.55;
+    const stepCount = Math.ceil((deckY - 0.3) / 0.36);
+    const turns = 1.3;
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0xd7e6ef });
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+    for (let i = 0; i < stepCount; i++) {
+      const t = i / stepCount;
+      const angle = baseAngle + t * turns * Math.PI * 2;
+      const sx = x + Math.cos(angle) * stepRadius;
+      const sz = z + Math.sin(angle) * stepRadius;
+      const sy = 0.3 + t * (deckY - 0.3);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.42), stepMat);
+      step.position.set(sx, sy, sz);
+      step.rotation.y = -angle;
+      step.castShadow = true; step.receiveShadow = true;
+      scene.add(step);
+      if (i % 3 === 0) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.08), postMat);
+        const outerR = stepRadius + 0.32;
+        post.position.set(x + Math.cos(angle) * outerR, sy + 0.35, z + Math.sin(angle) * outerR);
+        scene.add(post);
+      }
+    }
+    const ladderX = x + Math.cos(baseAngle) * stepRadius, ladderZ = z + Math.sin(baseAngle) * stepRadius;
+
+    towers.push({ x, z, deckY, radius: 2.3, ladderX, ladderZ, color: name, baseAngle, stepRadius, turns });
+  }
+  addTower(0, -ARENA_HALF + 5, 0x2f6fd6, 'blue', 1);
+  addTower(0, ARENA_HALF - 5, 0xd62f2f, 'red', -1);
+
+  const baseCover = [[9, 8], [15, 4], [5, 15], [-13, 3]];
+  const coverPositions = baseCover.flatMap(([x, z]) => [[x, z], [-x, -z]]);
+  coverPositions.forEach(([x, z]) => {
+    const w = 3, h = 1.6, d = 1.4;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
+    const body = new CANNON.Body({ mass: 0, material: groundMat });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
+    body.position.set(x, h / 2, z);
+    world.addBody(body);
+    obstacles.push({ x, z, hw: w / 2, hd: d / 2 });
+  });
+
+  snowPiles.forEach(p => {
+    const g = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.5 + Math.random() * 0.3, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      s.position.set((Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 0.3, (Math.random() - 0.5) * 1.2);
+      s.castShadow = true; s.receiveShadow = true;
+      g.add(s);
+    }
+    g.position.set(p.x, 0, p.z);
+    scene.add(g);
+  });
+
+  handGroup = new THREE.Group();
+  const handMat = new THREE.MeshStandardMaterial({ color: 0xffd7a8 });
+  const sleeveMat = new THREE.MeshStandardMaterial({ color: selectedTeam === 'red' ? 0xd62f2f : 0x2f6fd6 });
+  function makeArm() {
+    const g = new THREE.Group();
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.35, 8), sleeveMat);
+    sleeve.position.set(0, -0.05, 0.1);
+    sleeve.rotation.x = 0.5;
+    g.add(sleeve);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), handMat);
+    hand.position.set(0, 0.12, 0.28);
+    g.add(hand);
+    return g;
+  }
+  rightHand = makeArm(); rightHand.position.set(0.08, -0.24, -0.42);
+  handGroup.add(rightHand);
+  camera.add(handGroup);
+
+  craftBall = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+  craftBall.position.set(0, 0.1, 0.22);
+  craftBall.scale.set(0.001, 0.001, 0.001);
+  rightHand.add(craftBall);
+
+  spawnDummies();
+  createPlayerRig(bodyMat);
+
+  setupControls();
+}
+
+function spawnDummies() {
+  const enemyTeam = selectedTeam === 'red' ? 'blue' : 'red';
+  const allyTeam = selectedTeam;
+  const blueTower = towers.find(t => t.color === 'blue');
+  const redTower = towers.find(t => t.color === 'red');
+  const blueGround = [[-8, -14], [8, -14], [-14, -8], [14, -8]];
+  const redGround = blueGround.map(([x, z]) => [-x, -z]);
+
+  function spawnTeam(team, tower, groundSpots, count) {
+    createDummy({ x: tower.x, z: tower.z, team, groundY: tower.deckY, role: 'ranged' }, globalBodyMat);
+    const rangedGroundCount = Math.max(0, Math.round((count - 1) / 3));
+    for (let i = 0; i < count - 1; i++) {
+      const [gx, gz] = groundSpots[i];
+      const role = i < rangedGroundCount ? 'ranged' : 'rusher';
+      createDummy({ x: gx, z: gz, team, role }, globalBodyMat);
+    }
+  }
+  const enemyCount = 5, allyCount = 4;
+  if (enemyTeam === 'blue') {
+    spawnTeam('blue', blueTower, blueGround, enemyCount);
+    spawnTeam('red', redTower, redGround, allyCount);
+  } else {
+    spawnTeam('red', redTower, redGround, enemyCount);
+    spawnTeam('blue', blueTower, blueGround, allyCount);
+  }
+}
+
+function createPlayerRig(bodyMat) {
+  const color = selectedTeam === 'red' ? 0xe74c3c : 0x2f80ff;
+  const parts = {};
+  function addPart(name, sx, sy, sz, rx, ry, rz, mass) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), new THREE.MeshStandardMaterial({ color }));
+    mesh.castShadow = true;
+    mesh.visible = false;
+    scene.add(mesh);
+    const body = new CANNON.Body({ mass, material: bodyMat, type: CANNON.Body.KINEMATIC });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2)));
+    body.standRel = { x: rx, y: ry, z: rz };
+    body.position.set(playerPos.x + rx, ry, playerPos.z + rz);
+    world.addBody(body);
+    parts[name] = { mesh, body, mass };
+  }
+  addPart('torso', 0.5, 0.7, 0.28, 0, 1.35, 0, 8);
+  addPart('head', 0.32, 0.32, 0.32, 0, 1.9, 0, 2);
+  addPart('legL', 0.22, 0.75, 0.22, -0.14, 0.6, 0, 3);
+  addPart('legR', 0.22, 0.75, 0.22, 0.14, 0.6, 0, 3);
+  addPart('armL', 0.18, 0.6, 0.18, -0.42, 1.4, 0, 2);
+  addPart('armR', 0.18, 0.6, 0.18, 0.42, 1.4, 0, 2);
+
+  function link(a, b, pa, pb) {
+    const c = new CANNON.PointToPointConstraint(parts[a].body, new CANNON.Vec3(pa.x, pa.y, pa.z), parts[b].body, new CANNON.Vec3(pb.x, pb.y, pb.z));
+    c.equations.forEach(eq => { eq.maxForce = 180; eq.minForce = -180; });
+    world.addConstraint(c);
+  }
+  link('torso', 'head', { x: 0, y: 0.35, z: 0 }, { x: 0, y: -0.16, z: 0 });
+  link('torso', 'legL', { x: -0.14, y: -0.35, z: 0 }, { x: 0, y: 0.37, z: 0 });
+  link('torso', 'legR', { x: 0.14, y: -0.35, z: 0 }, { x: 0, y: 0.37, z: 0 });
+  link('torso', 'armL', { x: -0.28, y: 0.25, z: 0 }, { x: 0, y: 0.3, z: 0 });
+  link('torso', 'armR', { x: 0.28, y: 0.25, z: 0 }, { x: 0, y: 0.3, z: 0 });
+
+  playerRig = { parts };
+}
+
+function triggerPlayerRagdoll(velocity) {
+  if (playerDown || !playerRig) return;
+  playerDown = true;
+  playerDownTimer = 0;
+  handGroup.visible = false;
+  document.exitPointerLock && document.exitPointerLock();
+  Object.values(playerRig.parts).forEach(p => {
+    p.body.position.set(playerPos.x + p.body.standRel.x, playerGroundY + EYE_HEIGHT - 1.9 + p.body.standRel.y, playerPos.z + p.body.standRel.z);
+    p.body.quaternion.set(0, 0, 0, 1);
+    p.body.velocity.set(0, 0, 0);
+    p.body.angularVelocity.set(0, 0, 0);
+    p.body.type = CANNON.Body.DYNAMIC;
+    p.body.mass = p.mass;
+    p.body.linearDamping = 0.35;
+    p.body.angularDamping = 0.55;
+    p.body.updateMassProperties();
+    p.body.wakeUp();
+    p.mesh.visible = true;
+  });
+  playerRig.parts.torso.body.velocity.set(velocity.x * 0.55, Math.max(velocity.y * 0.55, 2), velocity.z * 0.55);
+}
+
+function respawnPlayer() {
+  playerDown = false;
+  playerDownTimer = 0;
+  const spawn = selectedTeam === 'red' ? { x: 0, z: ARENA_HALF - 11 } : { x: 0, z: -ARENA_HALF + 11 };
+  playerPos.x = spawn.x; playerPos.z = spawn.z;
+  playerVelY = 0; playerJumpY = 0; isJumping = false;
+  playerGroundY = 0; isClimbing = false; climbingTower = null;
+  handGroup.visible = true;
+  Object.values(playerRig.parts).forEach(p => {
+    p.body.velocity.set(0, 0, 0);
+    p.body.angularVelocity.set(0, 0, 0);
+    p.body.type = CANNON.Body.KINEMATIC;
+    p.mesh.visible = false;
+  });
+}
+
+function updatePlayerRagdoll(dt) {
+  if (!playerDown) return;
+  playerDownTimer += dt * 1000;
+  Object.values(playerRig.parts).forEach(p => {
+    p.mesh.position.copy(p.body.position);
+    p.mesh.quaternion.copy(p.body.quaternion);
+  });
+  const torsoPos = playerRig.parts.torso.body.position;
+  const camTarget = new THREE.Vector3(torsoPos.x, torsoPos.y + 3.2, torsoPos.z + 4.5);
+  camera.position.lerp(camTarget, 0.08);
+  camera.rotation.order = 'YXZ';
+  camera.lookAt(torsoPos.x, torsoPos.y, torsoPos.z);
+  if (playerDownTimer >= PLAYER_RESPAWN_TIME) respawnPlayer();
+}
+
+function createDummy(spawn, bodyMat) {
+  const color = spawn.team === 'red' ? 0xe74c3c : 0x2f80ff;
+  const groundY = spawn.groundY || 0;
+  const parts = {};
+  function addPart(name, sx, sy, sz, rx, ry, rz, mass) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), new THREE.MeshStandardMaterial({ color }));
+    mesh.castShadow = true;
+    scene.add(mesh);
+    const body = new CANNON.Body({ mass, material: bodyMat, type: CANNON.Body.KINEMATIC });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2)));
+    body.standRel = { x: rx, y: ry, z: rz };
+    body.position.set(spawn.x + rx, groundY + ry, spawn.z + rz);
+    world.addBody(body);
+    parts[name] = { mesh, body, mass };
+  }
+  addPart('torso', 0.5, 0.7, 0.28, 0, 1.35, 0, 8);
+  addPart('head', 0.32, 0.32, 0.32, 0, 1.9, 0, 2);
+  addPart('legL', 0.22, 0.75, 0.22, -0.14, 0.6, 0, 3);
+  addPart('legR', 0.22, 0.75, 0.22, 0.14, 0.6, 0, 3);
+  addPart('armL', 0.18, 0.6, 0.18, -0.42, 1.4, 0, 2);
+  addPart('armR', 0.18, 0.6, 0.18, 0.42, 1.4, 0, 2);
+
+  function link(a, b, pa, pb) {
+    const c = new CANNON.PointToPointConstraint(parts[a].body, new CANNON.Vec3(pa.x, pa.y, pa.z), parts[b].body, new CANNON.Vec3(pb.x, pb.y, pb.z));
+    c.equations.forEach(eq => { eq.maxForce = 180; eq.minForce = -180; });
+    world.addConstraint(c);
+  }
+  link('torso', 'head', { x: 0, y: 0.35, z: 0 }, { x: 0, y: -0.16, z: 0 });
+  link('torso', 'legL', { x: -0.14, y: -0.35, z: 0 }, { x: 0, y: 0.37, z: 0 });
+  link('torso', 'legR', { x: 0.14, y: -0.35, z: 0 }, { x: 0, y: 0.37, z: 0 });
+  link('torso', 'armL', { x: -0.28, y: 0.25, z: 0 }, { x: 0, y: 0.3, z: 0 });
+  link('torso', 'armR', { x: 0.28, y: 0.25, z: 0 }, { x: 0, y: 0.3, z: 0 });
+
+  const dummy = {
+    parts, spawn, state: 'standing', downTime: 0, team: spawn.team, groundY,
+    npcPos: { x: spawn.x, z: spawn.z },
+    wanderTarget: { x: spawn.x, z: spawn.z },
+    wanderTimer: Math.random() * 2,
+    throwCooldown: 1 + Math.random() * 2,
+    ammo: groundY > 0.05 ? Infinity : 2, maxAmmo: 4, craftT: 0, seekingPile: null,
+    walkPhase: Math.random() * 10, walkAmp: 0, throwAnimT: -1, facingYaw: 0, role: spawn.role || 'rusher'
+  };
+  Object.values(parts).forEach(p => { p.body.dummyRef = dummy; });
+  dummies.push(dummy);
+}
+
+function ragdollHit(dummy, hitBody, velocity) {
+  if (dummy.state !== 'standing') return;
+  dummy.state = 'down';
+  dummy.downTime = 0;
+  Object.values(dummy.parts).forEach(p => {
+    p.body.type = CANNON.Body.DYNAMIC;
+    p.body.mass = p.mass;
+    p.body.linearDamping = 0.35;
+    p.body.angularDamping = 0.55;
+    p.body.updateMassProperties();
+    p.body.wakeUp();
+  });
+  hitBody.velocity.set(velocity.x * 0.45, velocity.y * 0.45 + 2, velocity.z * 0.45);
+}
+function respawnDummy(dummy) {
+  dummy.state = 'standing';
+  dummy.npcPos = { x: dummy.spawn.x, z: dummy.spawn.z };
+  dummy.wanderTarget = { x: dummy.spawn.x, z: dummy.spawn.z };
+  dummy.wanderTimer = Math.random() * 2;
+  dummy.throwCooldown = 1 + Math.random() * 2;
+  dummy.ammo = dummy.groundY > 0.05 ? Infinity : 2;
+  dummy.seekingPile = null; dummy.craftT = 0; dummy.walkAmp = 0; dummy.throwAnimT = -1; dummy.facingYaw = 0;
+  Object.values(dummy.parts).forEach(p => {
+    p.body.velocity.set(0, 0, 0);
+    p.body.angularVelocity.set(0, 0, 0);
+    p.body.position.set(dummy.spawn.x + p.body.standRel.x, dummy.groundY + p.body.standRel.y, dummy.spawn.z + p.body.standRel.z);
+    p.body.quaternion.set(0, 0, 0, 1);
+    p.body.type = CANNON.Body.KINEMATIC;
+  });
+}
+
+function throwSnowball() {
+  if (playerDown) return;
+  if (snowCount <= 0 || !gameInited) return;
+  snowCount--;
+  updateSnowHud();
+  playThrowAnim();
+
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+  const spawnPos = camPos.clone().add(dir.clone().multiplyScalar(0.6));
+
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  const body = new CANNON.Body({ mass: 0.4, material: new CANNON.Material() });
+  body.addShape(new CANNON.Sphere(0.13));
+  body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+  const speed = 27;
+  body.velocity.set(dir.x * speed, dir.y * speed + 3.2, dir.z * speed);
+  world.addBody(body);
+  const sbObj = { mesh, body, life: 0, impacted: false, team: selectedTeam };
+  body.addEventListener('collide', (e) => handleImpact(sbObj, e.body, body.velocity));
+
+  snowballs.push(sbObj);
+}
+
+function handleImpact(sbObj, hitBody, hitVelocity) {
+  if (sbObj.impacted) return;
+  sbObj.impacted = true;
+  if (hitBody && hitBody.dummyRef) {
+    if (hitBody.dummyRef.team !== sbObj.team) {
+      ragdollHit(hitBody.dummyRef, hitBody, hitVelocity);
+    }
+  } else {
+    spawnSplat(sbObj.body.position);
+    spawnParticles(sbObj.body.position);
+  }
+}
+
+function spawnSplat(pos) {
+  const geo = new THREE.CircleGeometry(0.2 + Math.random() * 0.08, 10);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(pos.x, Math.max(0.02, pos.y - 0.1) + 0.01, pos.z);
+  scene.add(mesh);
+  splats.push({ mesh, life: 0 });
+}
+
+function spawnParticles(pos) {
+  for (let i = 0; i < 8; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    p.position.set(pos.x, pos.y, pos.z);
+    const a = Math.random() * Math.PI * 2;
+    const spd = 1.2 + Math.random() * 1.8;
+    p.userData.vel = new THREE.Vector3(Math.cos(a) * spd, 1.5 + Math.random() * 2, Math.sin(a) * spd);
+    p.userData.life = 0;
+    scene.add(p);
+    particles.push(p);
+  }
+}
+
+function updateSplats(dt) {
+  for (let i = splats.length - 1; i >= 0; i--) {
+    const s = splats[i];
+    s.life += dt;
+    s.mesh.material.opacity = Math.max(0, 0.85 * (1 - s.life / 5));
+    if (s.life > 5) { scene.remove(s.mesh); splats.splice(i, 1); }
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.userData.life += dt;
+    p.userData.vel.y -= 9 * dt;
+    p.position.addScaledVector(p.userData.vel, dt);
+    const s = Math.max(0, 1 - p.userData.life / 0.5);
+    p.scale.setScalar(s);
+    if (p.userData.life > 0.5) { scene.remove(p); particles.splice(i, 1); }
+  }
+}
+
+function playThrowAnim() { throwAnimT = 0; }
+function updateThrowAnim(dt) {
+  if (throwAnimT < 0) return;
+  throwAnimT += dt;
+  const t = throwAnimT;
+  if (t < 0.15) rightHand.rotation.x = -(t / 0.15) * 1.1;
+  else if (t < 0.32) rightHand.rotation.x = -1.1 + ((t - 0.15) / 0.17) * 1.5;
+  else { rightHand.rotation.x = 0; throwAnimT = -1; }
+}
+function playCraftPulse() {
+  handGroup.scale.set(1.25, 1.25, 1.25);
+  setTimeout(() => { if (handGroup) handGroup.scale.set(1, 1, 1); }, 150);
+}
+function updateSnowHud() {
+  document.getElementById('snowCount').textContent = snowCount;
+  document.getElementById('snowMax').textContent = snowMax;
+  syncHandBall();
+}
+function syncHandBall() {
+  if (!craftBall) return;
+  if (!crafting) {
+    const s = snowCount > 0 ? 1 : 0.001;
+    craftBall.scale.set(s, s, s);
+  }
+}
+
+function startCrafting() { if (!playerDown) crafting = true; }
+function stopCrafting() { crafting = false; }
+
+function updateCraftLogic(dtMs) {
+  let nearIdx = -1;
+  for (let i = 0; i < snowPiles.length; i++) {
+    const p = snowPiles[i];
+    const dx = playerPos.x - p.x, dz = playerPos.z - p.z;
+    if (dx * dx + dz * dz < PILE_RADIUS * PILE_RADIUS) { nearIdx = i; break; }
+  }
+  const promptEl = document.getElementById('craftPrompt');
+  const mobileBtn = document.getElementById('craftBtnMobile');
+  const hintEl = document.getElementById('craftHintText');
+
+  if (nearIdx >= 0 && snowCount < snowMax) {
+    promptEl.classList.add('show');
+    hintEl.textContent = touchDevice ? 'и держи ❄, чтобы слепить снежок' : 'и зажми E, чтобы слепить снежок';
+    mobileBtn.classList.toggle('active', crafting);
+    if (crafting) {
+      craftProgress += dtMs;
+      if (snowCount === 0) {
+        const s = Math.min(1, craftProgress / CRAFT_TIME);
+        craftBall.scale.set(s, s, s);
+      } else {
+        craftBall.scale.set(1, 1, 1);
+      }
+      if (craftProgress >= CRAFT_TIME) {
+        snowCount = Math.min(snowMax, snowCount + 1);
+        updateSnowHud();
+        craftProgress = 0;
+        playCraftPulse();
+      }
+    } else {
+      craftProgress = Math.max(0, craftProgress - dtMs * 2);
+      syncHandBall();
+    }
+  } else if (nearIdx >= 0) {
+    promptEl.classList.add('show');
+    hintEl.textContent = 'Снежков уже достаточно';
+    mobileBtn.classList.remove('active');
+    craftProgress = 0;
+    syncHandBall();
+  } else {
+    promptEl.classList.remove('show');
+    mobileBtn.classList.remove('active');
+    craftProgress = 0;
+    syncHandBall();
+  }
+  document.getElementById('craftRing').style.setProperty('--p', Math.round((craftProgress / CRAFT_TIME) * 100));
+}
+
+function resolveCollisions() {
+  const r = 0.4;
+  obstacles.forEach(o => {
+    if (o.tower && playerGroundY > 0.05) return;
+    const cx = Math.max(o.x - o.hw, Math.min(playerPos.x, o.x + o.hw));
+    const cz = Math.max(o.z - o.hd, Math.min(playerPos.z, o.z + o.hd));
+    const dx = playerPos.x - cx, dz = playerPos.z - cz;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < r * r && distSq > 0.0001) {
+      const dist = Math.sqrt(distSq);
+      const push = r - dist;
+      playerPos.x += (dx / dist) * push;
+      playerPos.z += (dz / dist) * push;
+    }
+  });
+}
+
+function updateMovement(dt) {
+  if (playerDown) return;
+  const forward = { x: -Math.sin(playerYaw), z: -Math.cos(playerYaw) };
+  const right = { x: Math.cos(playerYaw), z: -Math.sin(playerYaw) };
+  let mx = 0, mz = 0;
+  if (!touchDevice) {
+    if (keys['KeyW']) mz += 1;
+    if (keys['KeyS']) mz -= 1;
+    if (keys['KeyD']) mx += 1;
+    if (keys['KeyA']) mx -= 1;
+  } else {
+    mx = moveVec.x; mz = -moveVec.y;
+  }
+  const len = Math.hypot(mx, mz);
+  if (len > 1) { mx /= len; mz /= len; }
+  lastMoveLen = len;
+
+  if (isClimbing) {
+    camera.position.set(playerPos.x, playerGroundY + EYE_HEIGHT, playerPos.z);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = playerYaw;
+    camera.rotation.x = playerPitch;
+    return;
+  }
+
+  const moveX = forward.x * mz + right.x * mx;
+  const moveZ = forward.z * mz + right.z * mx;
+  const mlen = Math.hypot(moveX, moveZ) || 1;
+  const speed = MOVE_SPEED * dt;
+  playerPos.x += (moveX / mlen) * speed * (len > 0.02 ? 1 : 0);
+  playerPos.z += (moveZ / mlen) * speed * (len > 0.02 ? 1 : 0);
+  playerPos.x = Math.max(-ARENA_HALF + 0.6, Math.min(ARENA_HALF - 0.6, playerPos.x));
+  playerPos.z = Math.max(-ARENA_HALF + 0.6, Math.min(ARENA_HALF - 0.6, playerPos.z));
+
+  camera.position.set(playerPos.x, playerGroundY + EYE_HEIGHT + playerJumpY, playerPos.z);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = playerYaw;
+  camera.rotation.x = playerPitch;
+
+  const walking = len > 0.05;
+  handBobT += walking ? dt * 8 : dt * 2;
+  if (throwAnimT < 0) handGroup.position.y = walking && !isJumping ? Math.sin(handBobT) * 0.012 : 0;
+}
+
+function doJump() {
+  if (!isJumping && !isClimbing) {
+    playerVelY = JUMP_SPEED;
+    isJumping = true;
+  }
+}
+
+function updateJump(dt) {
+  if (!isJumping) return;
+  playerVelY += GRAVITY_PLAYER * dt;
+  playerJumpY += playerVelY * dt;
+  if (playerJumpY <= 0) {
+    playerJumpY = 0;
+    playerVelY = 0;
+    isJumping = false;
+  }
+}
+
+function groundHeightAt(x, z) {
+  for (const t of towers) {
+    const dx = x - t.x, dz = z - t.z;
+    if (dx * dx + dz * dz < t.radius * t.radius) return t.deckY;
+  }
+  return 0;
+}
+
+let climbingTower = null;
+function updateClimb(dt) {
+  if (playerDown) { isClimbing = false; climbingTower = null; return; }
+  if (!isClimbing) {
+    let nearLadder = null;
+    for (const t of towers) {
+      const dx = playerPos.x - t.ladderX, dz = playerPos.z - t.ladderZ;
+      if (Math.abs(dx) < 0.7 && Math.abs(dz) < 0.7 && playerGroundY < t.deckY - 0.05 && !isJumping) {
+        nearLadder = t; break;
+      }
+    }
+    if (nearLadder && lastMoveLen > 0.05) {
+      isClimbing = true;
+      climbingTower = nearLadder;
+    }
+  }
+  if (isClimbing && climbingTower) {
+    const t = climbingTower;
+    if (lastMoveLen > 0.05 && playerGroundY < t.deckY) {
+      playerGroundY = Math.min(t.deckY, playerGroundY + CLIMB_SPEED * dt);
+    }
+    const frac = Math.max(0, Math.min(1, playerGroundY / t.deckY));
+    const angle = t.baseAngle + frac * t.turns * Math.PI * 2;
+    playerPos.x = t.x + Math.cos(angle) * t.stepRadius;
+    playerPos.z = t.z + Math.sin(angle) * t.stepRadius;
+    if (playerGroundY >= t.deckY - 0.01) {
+      isClimbing = false;
+      climbingTower = null;
+    }
+  } else {
+    isClimbing = false;
+  }
+}
+
+function updateGroundHeight() {
+  if (isClimbing) return;
+  const target = groundHeightAt(playerPos.x, playerPos.z);
+  if (target < playerGroundY - 0.01) {
+    playerJumpY += (playerGroundY - target);
+    playerGroundY = target;
+    isJumping = true;
+  } else if (target > playerGroundY + 0.01) {
+    playerGroundY = target;
+  }
+}
+
+function throwNpcSnowball(dummy) {
+  dummy.throwAnimT = 0;
+  const head = dummy.parts.head.mesh;
+  const dx = playerPos.x - dummy.npcPos.x;
+  const dz = playerPos.z - dummy.npcPos.z;
+  const dist = Math.hypot(dx, dz) || 1;
+  const spread = 0.012;
+  const dirX = dx / dist + (Math.random() - 0.5) * spread;
+  const dirZ = dz / dist + (Math.random() - 0.5) * spread;
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+  mesh.castShadow = true;
+  scene.add(mesh);
+  const body = new CANNON.Body({ mass: 0.4, material: new CANNON.Material() });
+  body.addShape(new CANNON.Sphere(0.13));
+  body.position.set(dummy.npcPos.x + dirX * 0.55, head.position.y + 0.15, dummy.npcPos.z + dirZ * 0.55);
+  const speed = 20;
+  body.velocity.set(dirX * speed, dist / speed * 4 + 0.4, dirZ * speed);
+  world.addBody(body);
+  const sbObj = { mesh, body, life: 0, npc: true, impacted: false, team: dummy.team };
+  body.addEventListener('collide', (e) => handleImpact(sbObj, e.body, body.velocity));
+  snowballs.push(sbObj);
+}
+
+function throwNpcAtDummy(dummy, target) {
+  dummy.throwAnimT = 0;
+  const head = dummy.parts.head.mesh;
+  const targetPos = target.parts.torso.body.position;
+  const dx = targetPos.x - dummy.npcPos.x;
+  const dz = targetPos.z - dummy.npcPos.z;
+  const dist = Math.hypot(dx, dz) || 1;
+  const spread = 0.01;
+  const dirX = dx / dist + (Math.random() - 0.5) * spread;
+  const dirZ = dz / dist + (Math.random() - 0.5) * spread;
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+  mesh.castShadow = true;
+  scene.add(mesh);
+  const body = new CANNON.Body({ mass: 0.4, material: new CANNON.Material() });
+  body.addShape(new CANNON.Sphere(0.13));
+  body.position.set(dummy.npcPos.x + dirX * 0.55, head.position.y + 0.15, dummy.npcPos.z + dirZ * 0.55);
+  const speed = 20;
+  body.velocity.set(dirX * speed, dist / speed * 4 + 0.4, dirZ * speed);
+  world.addBody(body);
+  const sbObj = { mesh, body, life: 0, npc: true, impacted: false, team: dummy.team };
+  body.addEventListener('collide', (e) => handleImpact(sbObj, e.body, body.velocity));
+  snowballs.push(sbObj);
+}
+
+const AXIS_X = new CANNON.Vec3(1, 0, 0);
+const AXIS_Y = new CANNON.Vec3(0, 1, 0);
+function rotYZ(y, z, angle) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return { y: y * c - z * s, z: y * s + z * c };
+}
+function rotY(x, z, yaw) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  return { x: x * c + z * s, z: -x * s + z * c };
+}
+// Комбинирует поворот по Y (разворот тела) и по X (взмах конечности) вручную,
+// без .mult()/.copy() у CANNON.Quaternion — на некоторых сборках cannon.js они ненадёжны.
+function setYawXQuat(target, yaw, xAngle) {
+  const hy = yaw / 2, hx = xAngle / 2;
+  const syw = Math.sin(hy), cyw = Math.cos(hy);
+  const sxw = Math.sin(hx), cxw = Math.cos(hx);
+  // yawQuat(0,syw,0,cyw) * xQuat(sxw,0,0,cxw)
+  target.set(
+    cyw * sxw,
+    syw * cxw,
+    -syw * sxw,
+    cyw * cxw
+  );
+}
+
+function findNpcTarget(d) {
+  let best = null, bestDist = NPC_THROW_RANGE;
+  if (d.team !== selectedTeam && !playerDown) {
+    const dist = Math.hypot(playerPos.x - d.npcPos.x, playerPos.z - d.npcPos.z);
+    if (dist < bestDist) { best = { type: 'player' }; bestDist = dist; }
+  }
+  dummies.forEach(o => {
+    if (o === d || o.state !== 'standing' || o.team === d.team) return;
+    const dist = Math.hypot(o.npcPos.x - d.npcPos.x, o.npcPos.z - d.npcPos.z);
+    if (dist < bestDist) { best = { type: 'npc', dummy: o }; bestDist = dist; }
+  });
+  return best;
+}
+
+function updateNpcAI(dt) {
+  dummies.forEach(d => {
+    if (d.state !== 'standing') return;
+    if (selectedDifficulty === 'none') return;
+
+    const onTower = d.groundY > 0.05;
+    const fighting = selectedDifficulty === 'normal';
+
+    // Лепка снежков у кучи, если запас кончился
+    if (fighting && !onTower) {
+      if (d.ammo <= 0 && !d.seekingPile) {
+        let nearest = null, nd = Infinity;
+        snowPiles.forEach(p => {
+          const dd = Math.hypot(p.x - d.npcPos.x, p.z - d.npcPos.z);
+          if (dd < nd) { nd = dd; nearest = p; }
+        });
+        d.seekingPile = nearest;
+      }
+      if (d.seekingPile) {
+        const distToPile = Math.hypot(d.seekingPile.x - d.npcPos.x, d.seekingPile.z - d.npcPos.z);
+        if (distToPile > PILE_RADIUS * 0.5) {
+          d.wanderTarget = { x: d.seekingPile.x, z: d.seekingPile.z };
+        } else {
+          d.craftT += dt;
+          if (d.craftT > 1.1) {
+            d.craftT = 0;
+            d.ammo = Math.min(d.maxAmmo, d.ammo + 1);
+            if (d.ammo >= d.maxAmmo) d.seekingPile = null;
+          }
+        }
+      }
+    }
+
+    // Бой: ищем цель заранее, чтобы разворачиваться и двигаться во время боя
+    let combatTarget = null;
+    if (fighting) combatTarget = findNpcTarget(d);
+
+    // Передвижение к текущей цели блуждания (в бою — боевое перемещение вокруг цели)
+    if (fighting && !onTower && d.seekingPile) {
+      // идёт к куче — обрабатывается выше
+    } else if (fighting && !onTower && combatTarget) {
+      d.wanderTimer -= dt;
+      if (d.wanderTimer <= 0) {
+        const tPos = combatTarget.type === 'player' ? playerPos : combatTarget.dummy.npcPos;
+        const toTargetX = tPos.x - d.npcPos.x, toTargetZ = tPos.z - d.npcPos.z;
+        const toTargetDist = Math.hypot(toTargetX, toTargetZ) || 1;
+        const dirX = toTargetX / toTargetDist, dirZ = toTargetZ / toTargetDist;
+        const perpX = -dirZ, perpZ = dirX;
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const isRanged = d.role === 'ranged';
+        const ENGAGE_RANGE = isRanged ? 9.5 : 2.2;
+        if (toTargetDist > ENGAGE_RANGE) {
+          // сближаемся с целью (рашеры — агрессивно и быстро)
+          const step = isRanged
+            ? Math.min(toTargetDist - ENGAGE_RANGE + 0.5, 3)
+            : Math.min((toTargetDist - ENGAGE_RANGE + 1) * 1.4, 7);
+          d.wanderTarget = {
+            x: d.npcPos.x + dirX * step + perpX * side * 0.6,
+            z: d.npcPos.z + dirZ * step + perpZ * side * 0.6
+          };
+        } else {
+          // на своей дистанции — кружим/уклоняемся
+          const strafeAmt = isRanged ? (1.5 + Math.random() * 1.5) : (0.7 + Math.random() * 0.7);
+          d.wanderTarget = {
+            x: d.npcPos.x + perpX * side * strafeAmt,
+            z: d.npcPos.z + perpZ * side * strafeAmt
+          };
+        }
+        d.wanderTarget.x = Math.max(-ARENA_HALF + 1, Math.min(ARENA_HALF - 1, d.wanderTarget.x));
+        d.wanderTarget.z = Math.max(-ARENA_HALF + 1, Math.min(ARENA_HALF - 1, d.wanderTarget.z));
+        d.wanderTimer = (!isRanged && toTargetDist > ENGAGE_RANGE) ? (0.3 + Math.random() * 0.3) : (0.6 + Math.random() * 0.7);
+      }
+    } else {
+      d.wanderTimer -= dt;
+      if (d.wanderTimer <= 0) {
+        const radius = onTower ? 1.4 : 5;
+        d.wanderTarget = {
+          x: d.spawn.x + (Math.random() - 0.5) * radius,
+          z: d.spawn.z + (Math.random() - 0.5) * radius
+        };
+        if (!onTower) {
+          d.wanderTarget.x = Math.max(-ARENA_HALF + 1, Math.min(ARENA_HALF - 1, d.wanderTarget.x));
+          d.wanderTarget.z = Math.max(-ARENA_HALF + 1, Math.min(ARENA_HALF - 1, d.wanderTarget.z));
+        }
+        d.wanderTimer = 2 + Math.random() * 2.5;
+      }
+    }
+    const dx = d.wanderTarget.x - d.npcPos.x;
+    const dz = d.wanderTarget.z - d.npcPos.z;
+    const dist = Math.hypot(dx, dz);
+    const moving = dist > 0.15;
+    if (moving) {
+      d.npcPos.x += (dx / dist) * NPC_SPEED * dt;
+      d.npcPos.z += (dz / dist) * NPC_SPEED * dt;
+    }
+
+    // Разворот лицом к цели боя (или по направлению движения)
+    let desiredYaw = d.facingYaw;
+    if (combatTarget) {
+      const tPos = combatTarget.type === 'player' ? playerPos : combatTarget.dummy.npcPos;
+      desiredYaw = Math.atan2(tPos.x - d.npcPos.x, tPos.z - d.npcPos.z);
+    } else if (moving) {
+      desiredYaw = Math.atan2(dx, dz);
+    }
+    let yawDiff = desiredYaw - d.facingYaw;
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+    d.facingYaw += yawDiff * Math.min(1, dt * 6);
+
+    // Анимация: ходьба ногами/руками + бросок правой рукой
+    d.walkAmp += ((moving ? 1 : 0) - d.walkAmp) * Math.min(1, dt * 6);
+    d.walkPhase += dt * (moving ? 7 : 2);
+    const legSwing = Math.sin(d.walkPhase) * 0.55 * d.walkAmp;
+    const bob = Math.abs(Math.sin(d.walkPhase)) * 0.05 * d.walkAmp;
+
+    let armRAngle = -Math.sin(d.walkPhase) * 0.35 * d.walkAmp;
+    if (d.throwAnimT >= 0) {
+      d.throwAnimT += dt;
+      const p = Math.min(1, d.throwAnimT / 0.4);
+      armRAngle = -2.0 * Math.sin(p * Math.PI);
+      if (p >= 1) d.throwAnimT = -1;
+    }
+    const armLAngle = Math.sin(d.walkPhase) * 0.35 * d.walkAmp;
+
+    const gy = d.groundY;
+    const torsoXZ = rotY(0, 0, d.facingYaw);
+    d.parts.torso.body.position.set(d.npcPos.x + torsoXZ.x, gy + 1.35 + bob, d.npcPos.z + torsoXZ.z);
+    d.parts.torso.body.quaternion.setFromAxisAngle(AXIS_Y, d.facingYaw);
+    d.parts.head.body.position.set(d.npcPos.x + torsoXZ.x, gy + 1.9 + bob, d.npcPos.z + torsoXZ.z);
+    d.parts.head.body.quaternion.setFromAxisAngle(AXIS_Y, d.facingYaw);
+
+    const legR = rotYZ(-0.4, 0, legSwing);
+    const legRXZ = rotY(0.14, legR.z, d.facingYaw);
+    d.parts.legR.body.position.set(d.npcPos.x + legRXZ.x, gy + 1.0 + legR.y, d.npcPos.z + legRXZ.z);
+    setYawXQuat(d.parts.legR.body.quaternion, d.facingYaw, legSwing);
+    const legL = rotYZ(-0.4, 0, -legSwing);
+    const legLXZ = rotY(-0.14, legL.z, d.facingYaw);
+    d.parts.legL.body.position.set(d.npcPos.x + legLXZ.x, gy + 1.0 + legL.y, d.npcPos.z + legLXZ.z);
+    setYawXQuat(d.parts.legL.body.quaternion, d.facingYaw, -legSwing);
+
+    const armR = rotYZ(-0.2, 0, armRAngle);
+    const armRXZ = rotY(0.42, armR.z, d.facingYaw);
+    d.parts.armR.body.position.set(d.npcPos.x + armRXZ.x, gy + 1.6 + armR.y, d.npcPos.z + armRXZ.z);
+    setYawXQuat(d.parts.armR.body.quaternion, d.facingYaw, armRAngle);
+    const armL = rotYZ(-0.2, 0, armLAngle);
+    const armLXZ = rotY(-0.42, armL.z, d.facingYaw);
+    d.parts.armL.body.position.set(d.npcPos.x + armLXZ.x, gy + 1.6 + armL.y, d.npcPos.z + armLXZ.z);
+    setYawXQuat(d.parts.armL.body.quaternion, d.facingYaw, armLAngle);
+
+    // Бросок снежка во врага или игрока (только когда достаточно сблизились)
+    if (fighting && d.throwAnimT < 0 && (onTower || d.ammo > 0)) {
+      d.throwCooldown -= dt;
+      if (d.throwCooldown <= 0) {
+        const target = combatTarget;
+        if (target) {
+          const tPos = target.type === 'player' ? playerPos : target.dummy.npcPos;
+          const throwDist = Math.hypot(tPos.x - d.npcPos.x, tPos.z - d.npcPos.z);
+          const maxThrowDist = onTower || d.role === 'ranged' ? NPC_THROW_RANGE : 3.5;
+          if (throwDist < maxThrowDist) {
+            if (target.type === 'player') throwNpcSnowball(d);
+            else throwNpcAtDummy(d, target.dummy);
+            if (!onTower) d.ammo--;
+            d.throwCooldown = 1.1 + Math.random() * 1.3;
+          }
+        }
+      }
+    }
+  });
+}
+
+function checkNpcHitsOnPlayer() {
+  if (playerDown) return;
+  for (let i = snowballs.length - 1; i >= 0; i--) {
+    const sb = snowballs[i];
+    if (!sb.npc || sb.impacted || sb.team === selectedTeam) continue;
+    const dx = sb.body.position.x - playerPos.x;
+    const dz = sb.body.position.z - playerPos.z;
+    const relY = sb.body.position.y - playerGroundY;
+    if (dx * dx + dz * dz < 0.45 * 0.45 && relY > 0.05 && relY < 1.95) {
+      sb.impacted = true;
+      playerHitFlash = 1;
+      triggerPlayerRagdoll(sb.body.velocity);
+      scene.remove(sb.mesh);
+      world.removeBody(sb.body);
+      snowballs.splice(i, 1);
+    }
+  }
+}
+
+function updateHitFlash(dt) {
+  if (playerHitFlash <= 0) return;
+  playerHitFlash = Math.max(0, playerHitFlash - dt * 2.5);
+  document.getElementById('hitFlash').style.opacity = playerHitFlash * 0.7;
+}
+
+function pushRagdoll() {
+  const pushR = 0.5;
+  dummies.forEach(d => {
+    if (d.state !== 'down') return;
+    Object.values(d.parts).forEach(p => {
+      const dx = p.body.position.x - playerPos.x;
+      const dz = p.body.position.z - playerPos.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq < pushR * pushR && distSq > 0.0001) {
+        const dist = Math.sqrt(distSq);
+        p.body.velocity.x = (dx / dist) * 3.2;
+        p.body.velocity.z = (dz / dist) * 3.2;
+        p.body.velocity.y = Math.max(p.body.velocity.y, 1.2);
+        p.body.wakeUp();
+      }
+    });
+  });
+}
+
+function syncPhysics(dtMs) {
+  for (let i = snowballs.length - 1; i >= 0; i--) {
+    const sb = snowballs[i];
+    if (sb.impacted) {
+      scene.remove(sb.mesh);
+      world.removeBody(sb.body);
+      snowballs.splice(i, 1);
+      continue;
+    }
+    sb.mesh.position.copy(sb.body.position);
+    sb.mesh.quaternion.copy(sb.body.quaternion);
+    sb.life += dtMs;
+    if (sb.body.position.y < -5 || sb.life > 9000) {
+      scene.remove(sb.mesh);
+      world.removeBody(sb.body);
+      snowballs.splice(i, 1);
+    }
+  }
+  dummies.forEach(d => {
+    Object.values(d.parts).forEach(p => {
+      p.mesh.position.copy(p.body.position);
+      p.mesh.quaternion.copy(p.body.quaternion);
+    });
+    if (d.state === 'down') {
+      d.downTime += dtMs;
+      if (d.downTime > 5000) respawnDummy(d);
+    }
+  });
+}
+
+let controlsInited = false;
+function setupControls() {
+  if (controlsInited) return;
+  controlsInited = true;
+  window.addEventListener('resize', onResize);
+  const canvasEl = document.getElementById('gameCanvas');
+  if (!touchDevice) {
+    canvasEl.addEventListener('click', () => {
+      if (!pointerLocked) canvasEl.requestPointerLock();
+      else throwSnowball();
+    });
+    document.addEventListener('pointerlockchange', () => {
+      pointerLocked = document.pointerLockElement === canvasEl;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!pointerLocked) return;
+      playerYaw -= e.movementX * 0.0022;
+      playerPitch -= e.movementY * 0.0022;
+      playerPitch = Math.max(-1.3, Math.min(1.3, playerPitch));
+    });
+    document.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      if (e.code === 'KeyE') startCrafting();
+      if (e.code === 'Space') doJump();
+    });
+    document.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+      if (e.code === 'KeyE') stopCrafting();
+    });
+  } else {
+    setupTouchControls();
+  }
+}
+
+function setupTouchControls() {
+  const moveBase = document.getElementById('moveJoyBase');
+  const moveStick = document.getElementById('moveJoyStick');
+  let moveTouchId = null, baseRect;
+
+  moveBase.addEventListener('touchstart', (e) => {
+    moveTouchId = e.changedTouches[0].identifier;
+    baseRect = moveBase.getBoundingClientRect();
+    e.preventDefault();
+  }, { passive: false });
+  moveBase.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== moveTouchId) continue;
+      const cx = baseRect.left + baseRect.width / 2, cy = baseRect.top + baseRect.height / 2;
+      let dx = t.clientX - cx, dy = t.clientY - cy;
+      const max = baseRect.width / 2;
+      const dist = Math.min(Math.hypot(dx, dy), max);
+      const ang = Math.atan2(dy, dx);
+      dx = Math.cos(ang) * dist; dy = Math.sin(ang) * dist;
+      moveStick.style.transform = `translate(${dx}px, ${dy}px)`;
+      moveVec.x = dx / max; moveVec.y = dy / max;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  function endMove(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== moveTouchId) continue;
+      moveTouchId = null; moveVec.x = 0; moveVec.y = 0;
+      moveStick.style.transform = 'translate(0,0)';
+    }
+  }
+  moveBase.addEventListener('touchend', endMove);
+  moveBase.addEventListener('touchcancel', endMove);
+
+  const lookZone = document.getElementById('lookZone');
+  let lookTouchId = null, lastX = 0, lastY = 0;
+  lookZone.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    lookTouchId = t.identifier; lastX = t.clientX; lastY = t.clientY;
+    e.preventDefault();
+  }, { passive: false });
+  lookZone.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== lookTouchId) continue;
+      const dx = t.clientX - lastX, dy = t.clientY - lastY;
+      lastX = t.clientX; lastY = t.clientY;
+      playerYaw -= dx * 0.0035;
+      playerPitch -= dy * 0.0035;
+      playerPitch = Math.max(-1.3, Math.min(1.3, playerPitch));
+    }
+    e.preventDefault();
+  }, { passive: false });
+  function endLook(e) {
+    for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
+  }
+  lookZone.addEventListener('touchend', endLook);
+  lookZone.addEventListener('touchcancel', endLook);
+
+  document.getElementById('throwBtn').addEventListener('touchstart', (e) => { e.preventDefault(); throwSnowball(); }, { passive: false });
+  document.getElementById('jumpBtn').addEventListener('touchstart', (e) => { e.preventDefault(); doJump(); }, { passive: false });
+  const craftBtnEl = document.getElementById('craftBtnMobile');
+  craftBtnEl.addEventListener('touchstart', (e) => { e.preventDefault(); startCrafting(); }, { passive: false });
+  craftBtnEl.addEventListener('touchend', () => stopCrafting());
+  craftBtnEl.addEventListener('touchcancel', () => stopCrafting());
+}
+
+function onResize() {
+  if (!renderer) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(time) {
+  animId = requestAnimationFrame(animate);
+  if (!clockLast) clockLast = time;
+  let dt = (time - clockLast) / 1000;
+  dt = Math.min(dt, 0.05);
+  clockLast = time;
+
+  world.step(1 / 60, dt, 5);
+  updateMovement(dt);
+  updateJump(dt);
+  updateClimb(dt);
+  updateGroundHeight();
+  resolveCollisions();
+  pushRagdoll();
+  updateCraftLogic(dt * 1000);
+  updateNpcAI(dt);
+  syncPhysics(dt * 1000);
+  checkNpcHitsOnPlayer();
+  updateHitFlash(dt);
+  updateSplats(dt);
+  updateParticles(dt);
+  updatePlayerRagdoll(dt);
+  updateThrowAnim(dt);
+
+  renderer.render(scene, camera);
+}
+
+function enterGame() {
+  initGame();
+  document.getElementById('gameLoading').style.display = 'none';
+  playerPos.x = 0; playerPos.z = selectedTeam === 'red' ? ARENA_HALF - 11 : -ARENA_HALF + 11;
+  playerYaw = selectedTeam === 'red' ? Math.PI : 0; playerPitch = 0;
+  playerVelY = 0; playerJumpY = 0; isJumping = false;
+  playerGroundY = 0; isClimbing = false; climbingTower = null; lastMoveLen = 0;
+  playerDown = false; playerDownTimer = 0;
+  snowCount = 3; craftProgress = 0; crafting = false;
+  playerHitFlash = 0;
+  document.getElementById('hitFlash').style.opacity = 0;
+  updateSnowHud();
+  dummies.forEach(d => respawnDummy(d));
+  clockLast = 0;
+  if (animId) cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(animate);
+}
+
+// ===== ПОЛНОЭКРАННЫЙ РЕЖИМ (Android) =====
+function isAndroid() { return /Android/i.test(navigator.userAgent); }
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+if (isAndroid()) {
+  const fsBtn = document.createElement('div');
+  fsBtn.className = 'fullscreen-btn';
+  fsBtn.textContent = '⛶';
+  fsBtn.title = 'Полный экран';
+  fsBtn.onclick = toggleFullscreen;
+  document.body.appendChild(fsBtn);
+}
+
+// ===== 3D-АГЕНТ В МЕНЮ (подбрасывает и ловит снежок) =====
+function initMenuAgent() {
+  const canvas = document.getElementById('agentCanvas');
+  if (!canvas || typeof THREE === 'undefined') return;
+
+  const mScene = new THREE.Scene();
+  const mCamera = new THREE.PerspectiveCamera(32, 1, 0.1, 10);
+  mCamera.position.set(0, 1.3, 3.9);
+  mCamera.lookAt(0, 1.1, 0);
+  const mRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+
+  function resize() {
+    const w = canvas.clientWidth || 220, h = canvas.clientHeight || 320;
+    if (!w || !h) return;
+    mRenderer.setSize(w, h, false);
+    mCamera.aspect = w / h;
+    mCamera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  mScene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const mSun = new THREE.DirectionalLight(0xffffff, 0.9);
+  mSun.position.set(2, 4, 3);
+  mScene.add(mSun);
+
+  const suitMat = new THREE.MeshStandardMaterial({ color: 0x2f6fd6 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xffd7a8 });
+  const visorMat = new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 0.5 });
+  const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+  const char = new THREE.Group();
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.85, 0.34), suitMat);
+  torso.position.y = 1.15;
+  char.add(torso);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.34, 0.34), suitMat);
+  head.position.y = 1.75;
+  char.add(head);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.03), visorMat);
+  visor.position.set(0, 1.77, 0.18);
+  char.add(visor);
+
+  function leg(x) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.22), suitMat);
+    l.position.set(x, 0.375, 0);
+    char.add(l);
+  }
+  leg(-0.18); leg(0.18);
+
+  function armGroup(x, mirror) {
+    const g = new THREE.Group();
+    g.position.set(x, 1.5, 0);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.55, 0.18), suitMat);
+    upper.position.y = -0.275;
+    g.add(upper);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), skinMat);
+    hand.position.y = -0.58;
+    g.add(hand);
+    char.add(g);
+    return g;
+  }
+  const armL = armGroup(-0.4);
+  const armR = armGroup(0.4);
+
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), ballMat);
+  char.add(ball);
+
+  mScene.add(char);
+
+  const REST_ANGLE = 0, RAISED_ANGLE = -2.2;
+  const CYCLE_INTERVAL = 20;
+  const RAISE_DUR = 0.45, TOSS_DUR = 1.0, LOWER_DUR = 0.45;
+  let idleT = 0, cycleT = CYCLE_INTERVAL - 2, phase = 'idle', phaseT = 0;
+  armL.rotation.x = REST_ANGLE;
+
+  function placeHand(angle, extra) {
+    const y = 1.5 - 0.58 * Math.cos(angle);
+    const z = -0.58 * Math.sin(angle);
+    ball.position.set(0.4, y + (extra || 0), z + 0.06);
+    armR.rotation.x = angle;
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const agentEl = document.getElementById('agent');
+    if (agentEl && agentEl.classList.contains('hidden')) return;
+    const dt = 0.016;
+    idleT += dt;
+    cycleT += dt;
+
+    char.position.y = Math.sin(idleT * 1.4) * 0.015;
+    char.rotation.y = Math.sin(idleT * 0.3) * 0.28;
+
+    if (phase === 'idle') {
+      placeHand(REST_ANGLE, 0);
+      if (cycleT >= CYCLE_INTERVAL) { cycleT = 0; phase = 'raise'; phaseT = 0; }
+    } else if (phase === 'raise') {
+      phaseT += dt;
+      const p = Math.min(1, phaseT / RAISE_DUR);
+      placeHand(REST_ANGLE + (RAISED_ANGLE - REST_ANGLE) * p, 0);
+      if (p >= 1) { phase = 'toss'; phaseT = 0; }
+    } else if (phase === 'toss') {
+      phaseT += dt;
+      const p = Math.min(1, phaseT / TOSS_DUR);
+      const arc = Math.sin(p * Math.PI);
+      placeHand(RAISED_ANGLE, arc * 0.6);
+      if (p >= 1) { phase = 'lower'; phaseT = 0; }
+    } else if (phase === 'lower') {
+      phaseT += dt;
+      const p = Math.min(1, phaseT / LOWER_DUR);
+      placeHand(RAISED_ANGLE + (REST_ANGLE - RAISED_ANGLE) * p, 0);
+      if (p >= 1) { phase = 'idle'; phaseT = 0; }
+    }
+    ball.rotation.y += 0.08;
+
+    mRenderer.render(mScene, mCamera);
+  }
+  animate();
+}
+initMenuAgent();
+</script>
+</body>
+</html>
