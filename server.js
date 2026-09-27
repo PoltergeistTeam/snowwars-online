@@ -15,29 +15,43 @@ function send(ws, type, data) {
 
 function broadcast(type, data, except = null) {
   for (const client of clients.values()) {
-    if (client.ws !== except) {
-      send(client.ws, type, data);
-    }
+    if (client.ws !== except) send(client.ws, type, data);
   }
 }
 
 const server = http.createServer((req, res) => {
-  const url = req.url === '/' ? '/snowwars_menu.html' : req.url;
+  // Главная страница сайта — index.html.
+  // Игра открывается по адресу /snowwars_menu.html.
+  const requestPath = decodeURIComponent(req.url.split('?')[0]);
+  const url = requestPath === '/' ? '/index.html' : requestPath;
   const filePath = path.join(__dirname, url);
+
+  // Не разрешаем выход из папки проекта через ../
+  if (!filePath.startsWith(__dirname)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
-      res.writeHead(404);
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Not found');
       return;
     }
 
     const ext = path.extname(filePath);
-    let contentType = 'text/html; charset=utf-8';
-    if (ext === '.js') contentType = 'application/javascript';
-    if (ext === '.css') contentType = 'text/css';
+    const contentTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'application/javascript; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.json': 'application/json; charset=utf-8'
+    };
 
-    res.writeHead(200, { 'Content-Type': contentType });
+    res.writeHead(200, {
+      'Content-Type': contentTypes[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-cache'
+    });
     res.end(content);
   });
 });
@@ -59,7 +73,7 @@ wss.on('connection', (ws) => {
   };
 
   clients.set(playerId, player);
-  console.log(`✅ Игрок подключился: ${player.nick} (всего: ${clients.size})`);
+  console.log(`✅ Игрок подключился (всего: ${clients.size})`);
 
   ws.on('message', (raw) => {
     try {
@@ -70,10 +84,7 @@ wss.on('connection', (ws) => {
         player.nick = data.nick || 'Игрок';
         player.avatar = data.avatar || '⛄';
         player.team = data.team === 'red' ? 'red' : 'blue';
-
-        player.pos = player.team === 'red'
-          ? { x: 0, z: 17 }
-          : { x: 0, z: -17 };
+        player.pos = player.team === 'red' ? { x: 0, z: 17 } : { x: 0, z: -17 };
 
         send(ws, 'player:joined', {
           playerId: player.id,
@@ -85,7 +96,9 @@ wss.on('connection', (ws) => {
               nick: p.nick,
               avatar: p.avatar,
               team: p.team,
-              pos: p.pos
+              pos: p.pos,
+              yaw: p.yaw,
+              pitch: p.pitch
             }))
         });
 
@@ -94,10 +107,10 @@ wss.on('connection', (ws) => {
           nick: player.nick,
           avatar: player.avatar,
           team: player.team,
-          pos: player.pos
+          pos: player.pos,
+          yaw: player.yaw,
+          pitch: player.pitch
         }, ws);
-
-        console.log(`🎮 ${player.nick} присоединился (${player.team})`);
         return;
       }
 
@@ -126,8 +139,8 @@ wss.on('connection', (ws) => {
           team: player.team
         });
       }
-    } catch (e) {
-      console.error('WS parse error:', e);
+    } catch (error) {
+      console.error('WS parse error:', error);
     }
   });
 
@@ -139,5 +152,7 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🎮 SnowWars сервер запущен на http://localhost:${PORT}\n`);
+  console.log(`\n🎮 SnowWars сервер запущен на http://localhost:${PORT}`);
+  console.log('🌐 Сайт: http://localhost:3000/');
+  console.log('🎮 Игра: http://localhost:3000/snowwars_menu.html\n');
 });
