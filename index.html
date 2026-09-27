@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SnowWars V2 — FPS игра в браузере</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: 'Segoe UI', Arial, sans-serif; }
+
+  body {
+    background: linear-gradient(160deg, #1e3a5f 0%, #2d5a87 40%, #4a90b8 100%);
+    color: #fff;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* Снег */
+  #snowCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .container {
+    position: relative;
+    z-index: 2;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .title {
+    font-size: clamp(32px, 10vw, 72px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 30px rgba(255, 255, 255, 0.5), 0 4px 0 rgba(0, 0, 0, 0.4);
+    font-style: italic;
+  }
+
+  .subtitle {
+    font-size: clamp(14px, 3vw, 24px);
+    opacity: 0.85;
+    margin-bottom: 30px;
+    line-height: 1.6;
+    max-width: 600px;
+  }
+
+  .features {
+    font-size: clamp(12px, 2.5vw, 18px);
+    margin: 20px 0 50px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    opacity: 0.9;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .feature-icon {
+    font-size: 24px;
+  }
+
+  .download-btn {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border: 3px solid #fff;
+    border-radius: 20px;
+    padding: clamp(14px, 3vw, 22px) clamp(40px, 8vw, 80px);
+    font-size: clamp(16px, 3vw, 28px);
+    font-weight: 900;
+    letter-spacing: 2px;
+    cursor: pointer;
+    color: #fff;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 0 #1e8449, 0 12px 30px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .download-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 0 #1e8449, 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .download-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #1e8449, 0 6px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .platforms {
+    margin-top: 50px;
+    font-size: 14px;
+    opacity: 0.75;
+  }
+
+  .platform-list {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    margin-top: 15px;
+    flex-wrap: wrap;
+  }
+
+  .platform {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+  }
+
+  .platform-icon {
+    font-size: 28px;
+  }
+
+  /* Мобильная адаптация */
+  @media (max-width: 768px) {
+    .container {
+      padding: 30px 15px;
+    }
+
+    .title {
+      letter-spacing: 2px;
+    }
+
+    .platform-list {
+      gap: 20px;
+    }
+  }
+
+  @media (max-height: 700px) {
+    .container {
+      justify-content: flex-start;
+      padding-top: 40px;
+    }
+
+    .features {
+      margin: 15px 0 30px;
+    }
+  }
+
+  .glow {
+    animation: glow 2s ease-in-out infinite;
+  }
+
+  @keyframes glow {
+    0%, 100% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.3), 0 4px 0 rgba(0, 0, 0, 0.4); }
+    50% { text-shadow: 0 0 40px rgba(46, 204, 113, 0.8), 0 4px 0 rgba(0, 0, 0, 0.4); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="snowCanvas"></canvas>
+
+<div class="container">
+  <div class="title glow">❄ SnowWars V2 ❄</div>
+  
+  <div class="subtitle">
+    FPS игра с онлайном<br>
+    Кидай снежки, уничтожай противников<br>
+    <strong>В БРАУЗЕРЕ!</strong>
+  </div>
+
+  <div class="features">
+    <div class="feature-item">
+      <span class="feature-icon">⚡</span>
+      <span>Онлайн мультиплеер</span>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">🎮</span>
+      <span>Поддержка ПК, Mac, Linux</span>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">📱</span>
+      <span>Игра на Android прямо в браузере</span>
+    </div>
+  </div>
+
+  <a href="snowwars_menu.html" class="download-btn">ИГРАТЬ СЕЙЧАС</a>
+
+  <div class="platforms">
+    Доступно на:
+    <div class="platform-list">
+      <div class="platform">
+        <span class="platform-icon">🤖</span>
+        <span>Android</span>
+      </div>
+      <div class="platform">
+        <span class="platform-icon">🍎</span>
+        <span>macOS</span>
+      </div>
+      <div class="platform">
+        <span class="platform-icon">🐧</span>
+        <span>Linux</span>
+      </div>
+      <div class="platform">
+        <span class="platform-icon">🪟</span>
+        <span>Windows</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== СНЕГ =====
+  const canvas = document.getElementById('snowCanvas');
+  const ctx = canvas.getContext('2d');
+  let flakes = [];
+
+  function resize() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+  }
+  resize();
+  addEventListener('resize', resize);
+
+  for (let i = 0; i < 120; i++) {
+    flakes.push({
+      x: Math.random() * innerWidth,
+      y: Math.random() * innerHeight,
+      r: Math.random() * 3 + 1,
+      s: Math.random() * 1.5 + 0.5,
+      drift: Math.random() * 0.8 - 0.4
+    });
+  }
+
+  function drawSnow() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    
+    flakes.forEach(f => {
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fill();
+      
+      f.y += f.s;
+      f.x += f.drift;
+      
+      if (f.y > innerHeight) {
+        f.y = -5;
+        f.x = Math.random() * innerWidth;
+      }
+      if (f.x > innerWidth) f.x = 0;
+      if (f.x < 0) f.x = innerWidth;
+    });
+    
+    requestAnimationFrame(drawSnow);
+  }
+  
+  drawSnow();
+</script>
+
+</body>
+</html>
